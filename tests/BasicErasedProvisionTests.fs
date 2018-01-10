@@ -18,7 +18,7 @@ open Xunit
 #nowarn "760" // IDisposable needs new
 
 [<TypeProvider>]
-type ErasingProvider (config : TypeProviderConfig) as this =
+type ErasingProvider (config : TypeProviderConfig, hasBigInt: bool) as this =
     inherit TypeProviderForNamespaces (config)
 
     let ns = "StaticProperty.Provided"
@@ -27,12 +27,13 @@ type ErasingProvider (config : TypeProviderConfig) as this =
     let createTypes () =
         let myType = ProvidedTypeDefinition(asm, ns, "MyType", Some typeof<obj>)
         let myStaticGetterProp = ProvidedProperty("MyStaticGetterProperty", typeof<string list>, isStatic = true, getterCode = (fun _args -> <@@ Set.ofList [ "Hello world" ] @@>))
+        let myStaticGetterProp2 = ProvidedProperty("MyStaticGetterProperty2", (if hasBigInt then typeof<bigint> else typeof<int>), isStatic = true, getterCode = (fun _args -> if hasBigInt then <@@ 34L @@> else <@@ 34 @@>))
         let myStaticSetterProp = ProvidedProperty("MyStaticSetterProperty", typeof<string list>, isStatic = true, getterCode = (fun _args -> <@@ Set.ofList [ "Hello world" ] @@>), setterCode = (fun _args -> <@@ () @@>))
         let myStaticMethod = ProvidedMethod("MyStaticMethod", [ ProvidedParameter("paramName",typeof<string list>) ], typeof<string list>, isStatic = true, invokeCode = (fun _args -> <@@ Set.ofList [ "Hello world" ] @@>))
         let myGetterProp = ProvidedProperty("MyGetterProperty", typeof<string list>, getterCode = (fun _args -> <@@ Set.ofList [ "Hello world" ] @@>))
         let mySetterProp = ProvidedProperty("MySetterProperty", typeof<string list>, getterCode = (fun _args -> <@@ Set.ofList [ "Hello world" ] @@>), setterCode = (fun _args -> <@@ () @@>))
         let myMethod = ProvidedMethod("MyMethod", [ ProvidedParameter("paramName",typeof<string list>) ], typeof<string list>, invokeCode = (fun _args -> <@@ Set.ofList [ "Hello world" ] @@>))
-        myType.AddMembers [myStaticGetterProp; myStaticSetterProp; myGetterProp; mySetterProp]
+        myType.AddMembers [myStaticGetterProp; myStaticGetterProp2; myStaticSetterProp; myGetterProp; mySetterProp]
         myType.AddMembers [myStaticMethod; myMethod ]
 
         [myType]
@@ -72,7 +73,7 @@ type ErasingProviderWithStaticParams (config : TypeProviderConfig) as this =
     let ns = "StaticProperty.Provided"
     let asm = Assembly.GetExecutingAssembly()
 
-    let createType (typeName, _n:int) =
+    let createType (typeName, _n:int, _dayOfWeekInt: int) =
         let myType = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>)
         let myProp = ProvidedProperty("MyGetterProperty", typeof<string list>, isStatic = true, getterCode = (fun _args -> <@@ Set.ofList [ "Hello world" ] @@>))
         myType.AddMember(myProp)
@@ -84,8 +85,8 @@ type ErasingProviderWithStaticParams (config : TypeProviderConfig) as this =
 
     do
         let myType = ProvidedTypeDefinition(asm, ns, "MyType", Some typeof<obj>)
-        let parameters = [ ProvidedStaticParameter("Count", typeof<int>) ]
-        myType.DefineStaticParameters(parameters, (fun typeName args -> createType(typeName, args.[0] :?> int)))
+        let parameters = [ ProvidedStaticParameter("Count", typeof<int>); ProvidedStaticParameter("Day", typeof<System.DayOfWeek>) ]
+        myType.DefineStaticParameters(parameters, (fun typeName args -> createType(typeName, (args.[0] :?> int), (args.[1] :?> int))))
 
         this.AddNamespace(ns, [myType])
 
@@ -97,7 +98,7 @@ let testCrossTargeting (refs: string list) provider args =
 
 [<Fact>]
 let ``ErasingProvider generates for .NET 4.5 F# 3.1 correctly``() : unit  = 
-    let res = testCrossTargeting (Targets.DotNet45FSharp31Refs()) (fun args -> new ErasingProvider(args)) [| |]
+    let res = testCrossTargeting (Targets.DotNet45FSharp31Refs()) (fun args -> new ErasingProvider(args, true)) [| |]
     Assert.False(res.Contains "[FSharp.Core, Version=3.259.3.1")
     Assert.True(res.Contains "[FSharp.Core, Version=4.3.1.0")
     Assert.False(res.Contains "[FSharp.Core, Version=4.4.0.0")
@@ -105,7 +106,7 @@ let ``ErasingProvider generates for .NET 4.5 F# 3.1 correctly``() : unit  =
 [<Fact>]
 let ``ErasingProvider generates for .NET 4.5 F# 4.0 correctly``() : unit  = 
   if (try File.Exists (Targets.FSharpCore40Ref()) with _ -> false) then
-    let res = testCrossTargeting (Targets.DotNet45FSharp40Refs()) (fun args -> new ErasingProvider(args)) [| |]
+    let res = testCrossTargeting (Targets.DotNet45FSharp40Refs()) (fun args -> new ErasingProvider(args, true)) [| |]
     Assert.False(res.Contains "[FSharp.Core, Version=3.259.3.1")
     Assert.False(res.Contains "[FSharp.Core, Version=4.3.1.0")
     Assert.True(res.Contains "[FSharp.Core, Version=4.4.0.0")
@@ -115,7 +116,7 @@ let ``ErasingProvider generates for .NET 4.5 F# 4.0 correctly``() : unit  =
 [<Fact>]
 let ``ErasingProvider generates for Portable Profile 259 F# 3.1 correctly``() : unit = 
   if Targets.hasPortable259Assemblies() then 
-    let res = testCrossTargeting (Targets.Portable259FSharp31Refs()) (fun args -> new ErasingProvider(args)) [| |]
+    let res = testCrossTargeting (Targets.Portable259FSharp31Refs()) (fun args -> new ErasingProvider(args, false)) [| |]
     Assert.True(res.Contains "[FSharp.Core, Version=3.259.3.1")
     Assert.False(res.Contains "[FSharp.Core, Version=4.3.1.0")
     Assert.False(res.Contains "[FSharp.Core, Version=4.4.4.0")
@@ -123,7 +124,7 @@ let ``ErasingProvider generates for Portable Profile 259 F# 3.1 correctly``() : 
 [<Fact>]
 let ``ErasingProvider generates for Portable Profile 259 F# 4.0 correctly``() : unit = 
   if Targets.hasPortable259Assemblies() then 
-    let res = testCrossTargeting (Targets.Portable259FSharp40Refs()) (fun args -> new ErasingProvider(args)) [| |]
+    let res = testCrossTargeting (Targets.Portable259FSharp40Refs()) (fun args -> new ErasingProvider(args, false)) [| |]
     Assert.True(res.Contains "[FSharp.Core, Version=3.259.4.0")
     Assert.False(res.Contains "[FSharp.Core, Version=4.3.1.0")
     Assert.False(res.Contains "[FSharp.Core, Version=4.4.4.0")
@@ -132,15 +133,15 @@ let ``ErasingProvider generates for Portable Profile 259 F# 4.0 correctly``() : 
 [<Fact>]
 let ``ErasingProvider generates for Portable Profile 7 F# 4.0 correctly``() : unit = 
   if Targets.hasPortable7Assemblies() then 
-    let res = testCrossTargeting (Targets.Portable7FSharp40Refs()) (fun args -> new ErasingProvider(args)) [| |]
+    let res = testCrossTargeting (Targets.Portable7FSharp40Refs()) (fun args -> new ErasingProvider(args, false)) [| |]
     Assert.True(res.Contains "[FSharp.Core, Version=3.7.4.0")
     Assert.False(res.Contains "[FSharp.Core, Version=4.3.1.0")
     Assert.False(res.Contains "[FSharp.Core, Version=4.4.4.0")
 
 [<Fact>]
 let ``ErasingProviderWithStaticParams generates for .NET 4.5 F# 4.0 correctly``() : unit = 
-  if (try File.Exists (Targets.FSharpCore40Ref()) with _ -> false) then
-    let res = testCrossTargeting (Targets.DotNet45FSharp40Refs()) (fun args -> new ErasingProviderWithStaticParams(args)) [| box 3 |]
+  if Targets.supportsFSharp40() then 
+    let res = testCrossTargeting (Targets.DotNet45FSharp40Refs()) (fun args -> new ErasingProviderWithStaticParams(args)) [| box 3; box 4 |]
     printfn "res = %s" res
     Assert.False(res.Contains "[FSharp.Core, Version=3.259.3.1")
     Assert.False(res.Contains "[FSharp.Core, Version=4.3.1.0")
@@ -151,7 +152,7 @@ let ``ErasingProviderWithStaticParams generates for .NET 4.5 F# 4.0 correctly``(
 [<Fact>]
 let ``ErasingProviderWithStaticParams generates for Portable Profile 7 F# 4.0 correctly``() : unit = 
   if Targets.hasPortable7Assemblies() then 
-    let res = testCrossTargeting (Targets.Portable7FSharp40Refs()) (fun args -> new ErasingProviderWithStaticParams(args)) [| box 3 |]
+    let res = testCrossTargeting (Targets.Portable7FSharp40Refs()) (fun args -> new ErasingProviderWithStaticParams(args)) [| box 3; box 4 |]
     printfn "res = %s" res
     Assert.True(res.Contains "[FSharp.Core, Version=3.7.4.0")
     Assert.False(res.Contains "[FSharp.Core, Version=4.3.1.0")
@@ -167,8 +168,36 @@ let ``ErasingConstructorProvider generates for .NET 4.5 F# 3.1 correctly``() : u
     Assert.False(res.Contains "[FSharp.Core, Version=4.4.0.0")
 
 [<Fact>]
+let ``ErasingConstructorProvider generates for .NET 4.5 F# 4.1 correctly``() : unit  = 
+    printfn "--------- Generating code for 4.5 F# 4.1 ------"
+    let res = testCrossTargeting (Targets.DotNet45FSharp41Refs()) (fun args -> new ErasingConstructorProvider(args)) [| |]
+    Assert.False(res.Contains "[FSharp.Core, Version=3.259.4.1")
+    Assert.True(res.Contains "[FSharp.Core, Version=4.4.1.0")
+    Assert.False(res.Contains "[FSharp.Core, Version=4.3.1.0")
+    Assert.False(res.Contains "[FSharp.Core, Version=4.4.0.0")
+
+[<Fact>]
+let ``ErasingConstructorProvider generates for .NET Standard 2.0 F# 4.1 correctly``() : unit  = 
+    printfn "--------- Generating code for .NET Standard 2.0 F# 4.1 ------"
+    let res = testCrossTargeting (Targets.DotNetStandard20FSharp41Refs()) (fun args -> new ErasingConstructorProvider(args)) [| |]
+    Assert.False(res.Contains "[FSharp.Core, Version=3.259.4.1")
+    Assert.True(res.Contains "[FSharp.Core, Version=4.4.1.0")
+    Assert.False(res.Contains "[FSharp.Core, Version=4.3.1.0")
+    Assert.False(res.Contains "[FSharp.Core, Version=4.4.0.0")
+
+[<Fact>]
+let ``ErasingConstructorProvider generates for .NET CoreApp 2.0 F# 4.1 correctly``() : unit  = 
+    printfn "--------- Generating code for .NET CoreApp 2.0 F# 4.1 ------"
+    let res = testCrossTargeting (Targets.DotNetCoreApp20FSharp41Refs()) (fun args -> new ErasingConstructorProvider(args)) [| |]
+    Assert.False(res.Contains "[FSharp.Core, Version=3.259.4.1")
+    Assert.True(res.Contains "[FSharp.Core, Version=4.4.1.0")
+    Assert.False(res.Contains "[FSharp.Core, Version=4.3.1.0")
+    Assert.False(res.Contains "[FSharp.Core, Version=4.4.0.0")
+
+[<Fact>]
 let ``ErasingConstructorProvider generates for .NET 4.5 F# 4.0 correctly``() : unit  = 
-  if Targets.supportsFSharp40 then
+  if Targets.supportsFSharp40() then
+    printfn "--------- Generating code for 4.5 F# 4.0 ------"
     let res = testCrossTargeting (Targets.DotNet45FSharp40Refs()) (fun args -> new ErasingConstructorProvider(args)) [| |]
     Assert.False(res.Contains "[FSharp.Core, Version=3.259.3.1")
     Assert.False(res.Contains "[FSharp.Core, Version=4.3.1.0")
@@ -249,6 +278,24 @@ let ``Check target non-primitive types are different to design-time types``() : 
     for tname, sourceType, _ in nonPrimitives do
         let targetType = mscorlib31.GetType(tname)
         Assert.NotEqual(targetType, sourceType)
+
+
+[<Fact>]
+let ``Check target enum types gives right values``() : unit  = 
+    let refs = Targets.DotNet45FSharp31Refs()
+    let cfg = Testing.MakeSimulatedTypeProviderConfig (__SOURCE_DIRECTORY__, refs.[0], refs)
+    let tp = TypeProviderForNamespaces(cfg)
+    let dayOfWeekType = typeof<System.DayOfWeek>
+    let dayOfWeekTypeT = tp.TargetContext.ConvertSourceTypeToTarget dayOfWeekType
+    printfn "Enums #1"
+    Assert.True(dayOfWeekType.IsEnum)
+    printfn "Enums #2"
+    Assert.Equal(dayOfWeekType.GetEnumUnderlyingType().FullName, "System.Int32")
+    printfn "Enums #3"
+    Assert.True(dayOfWeekTypeT.IsEnum)
+    printfn "Enums #4"
+    Assert.Equal(dayOfWeekTypeT.GetEnumUnderlyingType().FullName, "System.Int32")
+    printfn "Done Enums"
 
 [<Fact>]
 let ``Check type remapping functions work for primitives``() : unit  = 
@@ -370,6 +417,34 @@ let ``test basic binding context portable259``() =
        ty.Assembly.GetName().Name |> (fun d -> Assert.Equal("System.Runtime", d))
        printfn "-=======================" 
    | Choice2Of2 err -> raise err
+
+#if !NETCOREAPP2_0
+[<Fact>]
+let ``test trasitive closure of source assemblies net45``() =
+   let pf = Targets.DotNet45Ref "PresentationFramework.dll"
+   let pc = Targets.DotNet45Ref "PresentationCore.dll"
+   if File.Exists pf && File.Exists pc  then 
+       let refs = Targets.DotNet45FSharp40Refs() @ [ pf; pc ] 
+       let config = Testing.MakeSimulatedTypeProviderConfig (resolutionFolder=__SOURCE_DIRECTORY__, runtimeAssembly="whatever.dll", runtimeAssemblyRefs=refs)
+       use tp1 = new TypeProviderForNamespaces(config)
+       let ctxt1 = tp1.TargetContext
+
+       printfn "finding PresentationFramework in targets..."
+       Assert.True(ctxt1.GetTargetAssemblies() |> Array.exists (fun a -> a.GetName().Name = "PresentationFramework"))
+
+       printfn "finding PresentationCore in targets..."
+       Assert.True(ctxt1.GetTargetAssemblies() |> Array.exists (fun a -> a.GetName().Name = "PresentationCore"))
+
+       ctxt1.AddSourceAssembly(Assembly.Load(AssemblyName.GetAssemblyName(pf)))
+
+       printfn "finding PresentationFramework in source assemblies..."
+       Assert.True(ctxt1.GetSourceAssemblies() |> Array.exists (fun a -> a.GetName().Name = "PresentationFramework"))
+
+       // Note we only have PresentationFramework in the source assemblies - that also implies PresentationCore because
+       // we use the transitive closure of assemblies.
+       printfn "finding PresentationCore in source assemblies..."
+       Assert.True(ctxt1.GetSourceAssemblies() |> Array.exists (fun a -> a.GetName().Name = "PresentationCore"))
+#endif
 
 [<Fact>]
 let ``test basic symbol type ops``() =
