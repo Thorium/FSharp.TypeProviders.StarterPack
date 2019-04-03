@@ -7976,6 +7976,9 @@ namespace ProviderImplementation.ProvidedTypes
                     let ass2opt = tryBindAssembly(aref2)
                     match ass2opt with
                     | Choice1Of2 ass2 -> 
+                        if nsp.HasValue && nsp.Value = "System" && (nm = "Object" || nm = "String" || nm = "Int32" || nm = "Boolean") then
+                            None
+                        else
                         match ass2.GetType(joinILTypeName nsp nm)  with 
                         | null -> None
                         | ty -> Some ty
