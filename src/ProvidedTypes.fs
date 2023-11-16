@@ -2226,7 +2226,7 @@ module internal AssemblyReader =
         static member SingleDimensional = singleDimensional
 
     /// Calling conventions.  These are used in method pointer types.
-    [<StructuralEquality; StructuralComparison; RequireQualifiedAccess>]
+    [<StructuralEquality; StructuralComparison; RequireQualifiedAccess; Struct>]
     type ILArgConvention =
         | Default
         | CDecl
@@ -2235,7 +2235,7 @@ module internal AssemblyReader =
         | FastCall
         | VarArg
 
-    [<StructuralEquality; StructuralComparison; RequireQualifiedAccess>]
+    [<StructuralEquality; StructuralComparison; RequireQualifiedAccess; Struct>]
     type ILThisConvention =
         | Instance
         | InstanceExplicit
@@ -2260,6 +2260,7 @@ module internal AssemblyReader =
         static member Instance = instanceCallConv
         static member Static = staticCallConv
 
+    [<Struct>]
     type ILBoxity =
         | AsObject
         | AsValue
@@ -2464,6 +2465,7 @@ module internal AssemblyReader =
     // Instruction set.                                                     
     // -------------------------------------------------------------------- 
 
+    [<Struct>]
     type ILBasicType =
       | DT_R
       | DT_I1
@@ -2486,27 +2488,31 @@ module internal AssemblyReader =
       | ILMethod of ILMethodSpec 
       | ILField of ILFieldSpec
 
-    [<StructuralEquality; StructuralComparison; RequireQualifiedAccess>]
+    [<StructuralEquality; StructuralComparison; RequireQualifiedAccess; Struct>]
     type ILConst = 
-      | I4 of int32
-      | I8 of int64
-      | R4 of single
-      | R8 of double
+      | I4 of i4: int32
+      | I8 of i8: int64
+      | R4 of r4: single
+      | R8 of r8: double
 
+    [<Struct>]
     type ILTailcall = 
       | Tailcall
       | Normalcall
 
+    [<Struct>]
     type ILAlignment =  
       | Aligned
       | Unaligned1
       | Unaligned2
       | Unaligned4
 
+    [<Struct>]
     type ILVolatility =  
       | Volatile
       | Nonvolatile
 
+    [<Struct>]
     type ILReadonly =  
       | ReadonlyAddress
       | NormalAddress
@@ -2714,6 +2720,7 @@ module internal AssemblyReader =
 #endif
          }
 
+    [<Struct>]
     type ILPlatform =
         | X86
         | AMD64
@@ -2733,7 +2740,7 @@ module internal AssemblyReader =
        static let empty = { new ILCustomAttrs with member __.Entries = [| |] }
        static member Empty = empty
 
-    [<RequireQualifiedAccess>]
+    [<RequireQualifiedAccess; Struct>]
     type ILMemberAccess =
         | Assembly
         | CompilerControlled
@@ -2778,7 +2785,7 @@ module internal AssemblyReader =
         member x.MethodRef = let (OverridesSpec(mr, _ty)) = x in mr
         member x.EnclosingType = let (OverridesSpec(_mr, ty)) = x in ty
 
-    [<StructuralEquality; StructuralComparison>]
+    [<StructuralEquality; StructuralComparison; Struct>]
     type ILGenericVariance =
         | NonVariant
         | CoVariant
@@ -2949,27 +2956,28 @@ module internal AssemblyReader =
     type ILMethodImplDefs =
         abstract Entries: ILMethodImplDef[]
 
-    [<RequireQualifiedAccess>]
+    [<RequireQualifiedAccess; Struct>]
     type ILTypeInit =
         | BeforeField
         | OnAny
 
-    [<RequireQualifiedAccess>]
+    [<RequireQualifiedAccess; Struct>]
     type ILDefaultPInvokeEncoding =
         | Ansi
         | Auto
         | Unicode
 
-    [<RequireQualifiedAccess>]
+    [<RequireQualifiedAccess; Struct>]
     type ILTypeDefLayout =
         | Auto
-        | Sequential of ILTypeDefLayoutInfo
-        | Explicit of ILTypeDefLayoutInfo
+        | Sequential of s: ILTypeDefLayoutInfo
+        | Explicit of e: ILTypeDefLayoutInfo
 
-    and ILTypeDefLayoutInfo =
+    and [<Struct>] ILTypeDefLayoutInfo =
         { Size: int32 option
           Pack: uint16 option } 
 
+    [<Struct>]
     type ILTypeDefAccess =
         | Public
         | Private
@@ -3115,7 +3123,7 @@ module internal AssemblyReader =
         member __.Entries = larr.Force()
         member __.TryFindByName (nsp, nm) = match getmap().TryGetValue ((nsp, nm)) with true, v -> Some v | false, _ -> None
 
-    [<RequireQualifiedAccess>]
+    [<RequireQualifiedAccess; Struct>]
     type ILResourceAccess =
         | Public
         | Private
@@ -3411,9 +3419,10 @@ module internal AssemblyReader =
         val index: int32
         new(tag, index) = { tag=tag; index=index }
 
-
+    [<Struct>]
     type ILImageChunk = { size: int32; addr: int32 }
 
+    [<Struct>]
     type ILRowElementKind =
         | UShort
         | ULong
