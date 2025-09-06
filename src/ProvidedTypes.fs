@@ -29,8 +29,8 @@ module Utils =
     let inline isEmpty x = Array.isEmpty x
 
     module Option = 
-        let toObj x = match x with None -> null | Some x -> x
-        let ofObj x = match x with null -> None | _ -> Some x
+        let toObj x = Option.defaultValue null x
+        let ofObj x = if isNull x then None else Some x
 
     [<Struct>]
     type StructOption<'T> (hasValue: bool, value: 'T) =
@@ -46,11 +46,11 @@ module Utils =
     let (|UNone|USome|) (x:uoption<'T>) = if x.HasValue then USome x.Value else UNone
 
     module StructOption = 
-        let toObj x = match x with UNone -> null | USome x -> x
-        let ofObj x = match x with null -> UNone | x -> USome x
+        let toObj (x: uoption<'T>) = if x.HasValue then x.Value else null
+        let ofObj x = if isNull x then UNone else USome x
 
 
-    let tryFindMulti k map = match Map.tryFind k map with Some res -> res | None -> [| |]
+    let tryFindMulti k map = Map.tryFind k map |> Option.defaultValue [| |]
 
     let splitNameAt (nm:string) idx =
         if idx < 0 then failwith "splitNameAt: idx < 0"
@@ -15258,9 +15258,7 @@ namespace ProviderImplementation.ProvidedTypes
                     | :? bool as x -> ilg.Emit(mk_ldc (if x then 1 else 0))
                     | :? float32 as x -> ilg.Emit(I_ldc (DT_R4, ILConst.R4 x))
                     | :? float as x -> ilg.Emit(I_ldc(DT_R8, ILConst.R8 x))
-    #if !FX_NO_GET_ENUM_UNDERLYING_TYPE
                     | :? Enum as x when Type.(=) (x.GetType().GetEnumUnderlyingType(), typeof<int32>) -> ilg.Emit(mk_ldc (unbox<int32> v))
-    #endif
                     | :? Type as ty ->
                         ilg.Emit(I_ldtoken (ILToken.ILType (transType ty)))
                         ilg.Emit(mkNormalCall (transMeth (getTypeFromHandleMethod())))
