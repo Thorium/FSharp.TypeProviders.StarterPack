@@ -25,8 +25,8 @@ open Microsoft.FSharp.Core.CompilerServices
 module Utils = 
     let K x = (fun () -> x)
     let inline isNull x = match x with null -> true | _ -> false
-    let inline isNil x = match x with [] -> true | _ -> false
-    let inline isEmpty x = match x with [| |] -> true | _ -> false
+    let inline isNil x = List.isEmpty x
+    let inline isEmpty x = Array.isEmpty x
 
     module Option = 
         let toObj x = match x with None -> null | Some x -> x
@@ -53,11 +53,11 @@ module Utils =
     let tryFindMulti k map = match Map.tryFind k map with Some res -> res | None -> [| |]
 
     let splitNameAt (nm:string) idx =
-        if idx < 0 then failwith "splitNameAt: idx < 0";
-        let last = nm.Length - 1
-        if idx > last then failwith "splitNameAt: idx > last";
-        (nm.Substring(0, idx)), 
-        (if idx < last then nm.Substring (idx+1, last - idx) else "")
+        if idx < 0 then failwith "splitNameAt: idx < 0"
+        if idx >= nm.Length then failwith "splitNameAt: idx > last"
+        let beforeIdx = nm.Substring(0, idx)
+        let afterIdx = if idx < nm.Length - 1 then nm.Substring(idx + 1) else ""
+        beforeIdx, afterIdx
 
     let splitILTypeName (nm:string) =
         match nm.LastIndexOf '.' with
@@ -70,8 +70,7 @@ module Utils =
         | USome ns -> ns + "." + nm
 
     let lengthsEqAndForall2 (arr1: 'T1[]) (arr2: 'T2[]) f =
-        (arr1.Length = arr2.Length) &&
-        (arr1, arr2) ||> Array.forall2 f
+        arr1.Length = arr2.Length && Array.forall2 f arr1 arr2
 
     /// General implementation of .Equals(Type) logic for System.Type over symbol types. You can use this with other types too.
     let rec eqTypes (ty1: Type) (ty2: Type) =
