@@ -3,6 +3,7 @@
     <OutputType>Library</OutputType>
     <TargetFramework>netstandard2.1</TargetFramework>
     <DefineConstants>IS_DESIGNTIME</DefineConstants>
+    <LangVersion>6.0</LangVersion>
   </PropertyGroup>
   <ItemGroup>
     <!-- It is normal to include a copy of the runtime helpers in the design-time DLL, to help build the code model which gets mapped to target files -->

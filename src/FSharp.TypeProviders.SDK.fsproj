@@ -10,8 +10,9 @@
     <Description>The core implementation of an F# type provider</Description>
     <Tags>F# fsharp typeprovider</Tags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <LangVersion>5.0</LangVersion>
+    <LangVersion>6.0</LangVersion>
     <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+    <DefineConstants>FSHARP6</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
@@ -29,7 +30,7 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Update="FSharp.Core" Version="4.7.2" />
+    <PackageReference Update="FSharp.Core" Version="6.0.1" />
   </ItemGroup>
 
 </Project>

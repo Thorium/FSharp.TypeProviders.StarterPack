@@ -5,6 +5,8 @@
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <LangVersion>6.0</LangVersion>
+    <DefineConstants>FSHARP6</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\..\src\ProvidedTypes.fsi" />
