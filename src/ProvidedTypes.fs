@@ -21,6 +21,10 @@ open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Quotations.Patterns
 open Microsoft.FSharp.Core.CompilerServices
 
+#if NETSTANDARD2_0
+// System.Memory provides ReadOnlySpan for .NET Standard 2.0
+#endif
+
 [<AutoOpen>]
 module Utils = 
     let K x = (fun () -> x)
@@ -56,8 +60,16 @@ module Utils =
         if idx < 0 then failwith "splitNameAt: idx < 0";
         let last = nm.Length - 1
         if idx > last then failwith "splitNameAt: idx > last";
+        #if NETSTANDARD2_0 || NETSTANDARD2_1
+        // Use ReadOnlySpan for efficient string slicing
+        let span = nm.AsSpan()
+        let firstPart = span.Slice(0, idx).ToString()
+        let secondPart = if idx < last then span.Slice(idx + 1, last - idx).ToString() else ""
+        firstPart, secondPart
+        #else
         (nm.Substring(0, idx)), 
         (if idx < last then nm.Substring (idx+1, last - idx) else "")
+        #endif
 
     let splitILTypeName (nm:string) =
         match nm.LastIndexOf '.' with
@@ -8981,7 +8993,12 @@ namespace ProviderImplementation.ProvidedTypes
               // when F# Interactive is the host of the design time assembly, 
               // all namespaces are prefixed with FSI_, in the runtime assembly
               // the name won't have that prefix
+              #if NETSTANDARD2_0 || NETSTANDARD2_1
+              let idx = fullName.IndexOf('.')
+              if idx >= 0 then fullName.AsSpan().Slice(idx + 1).ToString() else fullName
+              #else
               fullName.Substring(fullName.IndexOf('.') + 1)
+              #endif
           else
               fullName
 
