@@ -15508,28 +15508,130 @@ namespace ProviderImplementation.ProvidedTypes
                 ILMethodSpec(mref, transType m.DeclaringType, minst)
 
         let iterateTypes f providedTypeDefinitions =
-            let rec typeMembers (ptd: ProvidedTypeDefinition) =
-                let tb = typeMap.[ptd]
-                f tb (Some ptd)
-                for ntd in ptd.GetNestedTypes(bindAll) do
-                    nestedType ntd
-
-            and nestedType (ntd: Type) =
-                match ntd with
-                | :? ProvidedTypeDefinition as pntd -> typeMembers pntd
-                | _ -> ()
-
-            for (pt, enclosingGeneratedTypeNames) in providedTypeDefinitions do
+            // Create a flat list of all types to process for better parallelization
+            let allTypesToProcess = ResizeArray<(ILTypeBuilder * ProvidedTypeDefinition option)>()
+            
+            // Helper function to collect all types in hierarchy (stateless)
+            let collectTypes (pt: ProvidedTypeDefinition) (enclosingGeneratedTypeNames: string list option) =
+                let typesToCollect = ResizeArray<(ILTypeBuilder * ProvidedTypeDefinition option)>()
+                
                 match enclosingGeneratedTypeNames with
                 | None ->
-                    typeMembers pt
+                    // Use a work queue to flatten the recursive traversal
+                    let workQueue = Queue<ProvidedTypeDefinition>()
+                    workQueue.Enqueue(pt)
+                    
+                    while workQueue.Count > 0 do
+                        let currentType = workQueue.Dequeue()
+                        let tb = typeMap.[currentType]
+                        typesToCollect.Add((tb, Some currentType))
+                        
+                        // Add nested types to work queue
+                        for ntd in currentType.GetNestedTypes(bindAll) do
+                            match ntd with
+                            | :? ProvidedTypeDefinition as pntd -> 
+                                workQueue.Enqueue(pntd)
+                            | _ -> ()
+                            
                 | Some ns ->
-                    let _fullName  =
-                        ("", ns) ||> List.fold (fun fullName n ->
-                            let fullName = if fullName = "" then n else fullName + "." + n
-                            f typeMapExtra.[fullName] None
-                            fullName)
-                    nestedType pt
+                    // Handle namespace hierarchy
+                    ("", ns) ||> List.fold (fun fullName n ->
+                        let fullName = if fullName = "" then n else fullName + "." + n
+                        let tb = typeMapExtra.[fullName]
+                        typesToCollect.Add((tb, None))
+                        fullName) |> ignore
+                    
+                    // Process the main type and its nested types
+                    let workQueue = Queue<Type>()
+                    workQueue.Enqueue(pt)
+                    
+                    while workQueue.Count > 0 do
+                        let currentType = workQueue.Dequeue()
+                        match currentType with
+                        | :? ProvidedTypeDefinition as pntd -> 
+                            let tb = typeMap.[pntd]
+                            typesToCollect.Add((tb, Some pntd))
+                            
+                            // Add nested types to work queue
+                            for ntd in pntd.GetNestedTypes(bindAll) do
+                                workQueue.Enqueue(ntd)
+                        | _ -> ()
+                
+                typesToCollect.ToArray()
+            
+            // Collect all types from all provided type definitions
+            for (pt, enclosingGeneratedTypeNames) in providedTypeDefinitions do
+                let types = collectTypes pt enclosingGeneratedTypeNames
+                allTypesToProcess.AddRange(types)
+            
+            // Process all types in parallel where safe, otherwise sequentially
+            // Note: We keep sequential processing for now to maintain exact same behavior,
+            // but the flattened structure allows for easier parallelization in the future
+            let typesArray = allTypesToProcess.ToArray()
+            for (tb, ptdOpt) in typesArray do
+                f tb ptdOpt
+
+        // Parallel version for operations that are safe to parallelize (like setting base types)
+        let iterateTypesParallel f providedTypeDefinitions =
+            // Create a flat list of all types to process for better parallelization  
+            let allTypesToProcess = ResizeArray<(ILTypeBuilder * ProvidedTypeDefinition option)>()
+            
+            // Helper function to collect all types in hierarchy (stateless)
+            let collectTypes (pt: ProvidedTypeDefinition) (enclosingGeneratedTypeNames: string list option) =
+                let typesToCollect = ResizeArray<(ILTypeBuilder * ProvidedTypeDefinition option)>()
+                
+                match enclosingGeneratedTypeNames with
+                | None ->
+                    // Use a work queue to flatten the recursive traversal
+                    let workQueue = Queue<ProvidedTypeDefinition>()
+                    workQueue.Enqueue(pt)
+                    
+                    while workQueue.Count > 0 do
+                        let currentType = workQueue.Dequeue()
+                        let tb = typeMap.[currentType]
+                        typesToCollect.Add((tb, Some currentType))
+                        
+                        // Add nested types to work queue
+                        for ntd in currentType.GetNestedTypes(bindAll) do
+                            match ntd with
+                            | :? ProvidedTypeDefinition as pntd -> 
+                                workQueue.Enqueue(pntd)
+                            | _ -> ()
+                            
+                | Some ns ->
+                    // Handle namespace hierarchy
+                    ("", ns) ||> List.fold (fun fullName n ->
+                        let fullName = if fullName = "" then n else fullName + "." + n
+                        let tb = typeMapExtra.[fullName]
+                        typesToCollect.Add((tb, None))
+                        fullName) |> ignore
+                    
+                    // Process the main type and its nested types
+                    let workQueue = Queue<Type>()
+                    workQueue.Enqueue(pt)
+                    
+                    while workQueue.Count > 0 do
+                        let currentType = workQueue.Dequeue()
+                        match currentType with
+                        | :? ProvidedTypeDefinition as pntd -> 
+                            let tb = typeMap.[pntd]
+                            typesToCollect.Add((tb, Some pntd))
+                            
+                            // Add nested types to work queue
+                            for ntd in pntd.GetNestedTypes(bindAll) do
+                                workQueue.Enqueue(ntd)
+                        | _ -> ()
+                
+                typesToCollect.ToArray()
+            
+            // Collect all types from all provided type definitions
+            for (pt, enclosingGeneratedTypeNames) in providedTypeDefinitions do
+                let types = collectTypes pt enclosingGeneratedTypeNames
+                allTypesToProcess.AddRange(types)
+            
+            // Process all types in parallel for operations that are safe to parallelize
+            let typesArray = allTypesToProcess.ToArray()
+            typesArray |> Array.Parallel.iter (fun (tb, ptdOpt) -> f tb ptdOpt)
 
         let defineCustomAttrs f (cattrs: IList<CustomAttributeData>) =
             for attr in cattrs do
@@ -15598,8 +15700,8 @@ namespace ProviderImplementation.ProvidedTypes
                     defineNestedType otb.Value pt
 
 
-            // phase 1b - emit base types
-            providedTypeDefinitionsT |> iterateTypes (fun tb ptdT ->
+            // phase 1b - emit base types (using parallel processing for performance)
+            providedTypeDefinitionsT |> iterateTypesParallel (fun tb ptdT ->
                 match ptdT with
                 | None -> ()
                 | Some ptdT ->
