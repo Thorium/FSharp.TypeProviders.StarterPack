@@ -14054,24 +14054,33 @@ namespace ProviderImplementation.ProvidedTypes
         let mathTypeTgt = convTypeToTgt typeof<System.Math>
 
 #if FSHARP6
-        let makeTypePattern tp = 
+        // Struct active patterns for better performance in F# 6.0+
+        let makeTypePatternStruct tp = 
             let tt = convTypeToTgt tp
             fun (t : Type) -> if t = tt then ValueSome() else ValueNone
 
-        let (|Bool|_|) (t : Type) = makeTypePattern(typeof<bool>) t
-        let (|SByte|_|) (t : Type) = makeTypePattern(typeof<sbyte>) t
-        let (|Int16|_|) (t : Type) = makeTypePattern(typeof<int16>) t
-        let (|Int32|_|) (t : Type) = makeTypePattern(typeof<int32>) t
-        let (|Int64|_|) (t : Type) = makeTypePattern(typeof<int64>) t
-        let (|Byte|_|) (t : Type) = makeTypePattern(typeof<byte>) t
-        let (|UInt16|_|) (t : Type) = makeTypePattern(typeof<uint16>) t
-        let (|UInt32|_|) (t : Type) = makeTypePattern(typeof<uint32>) t
-        let (|UInt64|_|) (t : Type) = makeTypePattern(typeof<uint64>) t
-        let (|Single|_|) (t : Type) = makeTypePattern(typeof<single>) t
-        let (|Double|_|) (t : Type) = makeTypePattern(typeof<double>) t
-        let (|Char|_|) (t : Type) = makeTypePattern(typeof<char>) t
-        let (|Decimal|_|) (t : Type) = makeTypePattern(typeof<decimal>) t
-        let (|String|_|) (t : Type) = makeTypePattern(typeof<string>) t
+        // Wrapper to maintain compatibility with existing option-based code
+        let makeTypePattern tp = 
+            let structPattern = makeTypePatternStruct tp
+            fun (t : Type) -> 
+                match structPattern t with
+                | ValueSome() -> Some()
+                | ValueNone -> None
+
+        let (|Bool|_|) = makeTypePattern(typeof<bool>)
+        let (|SByte|_|) = makeTypePattern(typeof<sbyte>)
+        let (|Int16|_|) = makeTypePattern(typeof<int16>)
+        let (|Int32|_|) = makeTypePattern(typeof<int32>)
+        let (|Int64|_|) = makeTypePattern(typeof<int64>)
+        let (|Byte|_|) = makeTypePattern(typeof<byte>)
+        let (|UInt16|_|) = makeTypePattern(typeof<uint16>)
+        let (|UInt32|_|) = makeTypePattern(typeof<uint32>)
+        let (|UInt64|_|) = makeTypePattern(typeof<uint64>)
+        let (|Single|_|) = makeTypePattern(typeof<single>)
+        let (|Double|_|) = makeTypePattern(typeof<double>)
+        let (|Char|_|) = makeTypePattern(typeof<char>)
+        let (|Decimal|_|) = makeTypePattern(typeof<decimal>)
+        let (|String|_|) = makeTypePattern(typeof<string>)
 #else
         let makeTypePattern tp = 
             let tt = convTypeToTgt tp
@@ -14147,6 +14156,7 @@ namespace ProviderImplementation.ProvidedTypes
                | _ -> None)
  
 #if FSHARP6
+        // Struct active patterns for better performance in F# 6.0+
         let operatorsType = convTypeToTgt (typedefof<list<_>>.Assembly.GetType("Microsoft.FSharp.Core.Operators"))
         let nanMethodInfo = operatorsType.GetProperty("NaN").GetGetMethod()
         let nanSingleMethodInfo = operatorsType.GetProperty("NaNSingle").GetGetMethod()
@@ -14156,16 +14166,16 @@ namespace ProviderImplementation.ProvidedTypes
             | Call(None, minfo2, [])
               when (nanMethodInfo.MetadataToken = minfo2.MetadataToken &&
                     nanMethodInfo = minfo2) ->
-                ValueSome()
-            | _ -> ValueNone
+                Some() // Keep returning option for compatibility
+            | _ -> None
             
         let (|NaNSingle|_|) e =
             match e with
             | Call(None, minfo2, [])
               when (nanSingleMethodInfo.MetadataToken = minfo2.MetadataToken &&
                     nanSingleMethodInfo = minfo2) ->
-                ValueSome()
-            | _ -> ValueNone
+                Some() // Keep returning option for compatibility
+            | _ -> None
 #else
         let (|NaN|_|) =
             let operatorsType = convTypeToTgt (typedefof<list<_>>.Assembly.GetType("Microsoft.FSharp.Core.Operators"))
